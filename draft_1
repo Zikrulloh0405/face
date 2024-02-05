@@ -1,0 +1,106 @@
+# import cv2
+# import numpy as np
+# import mediapipe as mp
+
+# # Initialize MediaPipe Face Mesh
+# mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
+#     static_image_mode=True, max_num_faces=1, refine_landmarks=True)
+
+
+# def get_landmarks(image):
+#     results = mp_face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+#     if not results.multi_face_landmarks:
+#         return None
+#     face_landmarks = results.multi_face_landmarks[0].landmark
+#     landmarks = [(int(lm.x * image.shape[1]), int(lm.y * image.shape[0]))
+#                  for lm in face_landmarks]
+#     return landmarks
+
+
+# def apply_affine_transform(src, src_tri, dst_tri, size):
+#     warp_mat = cv2.getAffineTransform(np.float32(src_tri), np.float32(dst_tri))
+#     dst = cv2.warpAffine(src, warp_mat, (size[0], size[1]), None,
+#                          flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
+#     return dst
+
+
+# def warp_triangles(img1, img2, tri1, tri2):
+#     r1 = cv2.boundingRect(np.float32([tri1]))
+#     r2 = cv2.boundingRect(np.float32([tri2]))
+#     tri1_rect = []
+#     tri2_rect = []
+#     tri2_rect_int = []
+
+#     for i in range(0, 3):
+#         tri1_rect.append(((tri1[i][0] - r1[0]), (tri1[i][1] - r1[1])))
+#         tri2_rect.append(((tri2[i][0] - r2[0]), (tri2[i][1] - r2[1])))
+#         tri2_rect_int.append(
+#             (int(tri2[i][0] - r2[0]), int(tri2[i][1] - r2[1])))
+
+#     img1_rect = img1[r1[1]:r1[1]+r1[3], r1[0]:r1[0]+r1[2]]
+#     img2_rect = np.zeros((r2[3], r2[2], 3), dtype=img1_rect.dtype)
+#     img2_rect = apply_affine_transform(
+#         img1_rect, tri1_rect, tri2_rect, (r2[2], r2[3]))
+
+#     mask = np.zeros((r2[3], r2[2], 3), dtype=np.float32)
+#     cv2.fillConvexPoly(mask, np.int32(tri2_rect_int), (1.0, 1.0, 1.0), 16, 0)
+#     img2_rect = img2_rect * mask
+#     img2[r2[1]:r2[1]+r2[3], r2[0]:r2[0]+r2[2]] = img2[r2[1]                                                      :r2[1]+r2[3], r2[0]:r2[0]+r2[2]] * (1.0 - mask) + img2_rect
+
+
+# def process_video(static_image_path, video_path, output_video_path):
+#     print("Loading static image...")
+#     static_img = cv2.imread(static_image_path)
+#     static_landmarks = get_landmarks(static_img)
+#     if static_landmarks is None:
+#         print("Error in detecting landmarks in static image.")
+#         return
+
+#     print("Opening video file...")
+#     cap = cv2.VideoCapture(video_path)
+#     if not cap.isOpened():
+#         print("Error opening video file.")
+#         return
+
+#     ret, first_frame = cap.read()
+#     if not ret:
+#         print("Error reading video file.")
+#         cap.release()
+#         return
+
+#     height, width, layers = first_frame.shape
+#     video_writer = cv2.VideoWriter(
+#         output_video_path, cv2.VideoWriter_fourcc(*'mp4v'), 20, (width, height))
+
+#     print("Processing video...")
+#     while True:
+#         ret, frame = cap.read()
+#         if not ret:
+#             break
+
+#         frame_landmarks = get_landmarks(frame)
+#         if frame_landmarks is None:
+#             print("Landmarks not detected in frame, skipping...")
+#             continue
+
+#         # Warp each triangle from the static image to the current frame
+#         warped_frame = np.copy(frame)
+#         for i in range(len(static_landmarks) // 3):
+#             tri1 = [static_landmarks[3 * i],
+#                     static_landmarks[3 * i + 1], static_landmarks[3 * i + 2]]
+#             tri2 = [frame_landmarks[3 * i],
+#                     frame_landmarks[3 * i + 1], frame_landmarks[3 * i + 2]]
+#             warp_triangles(static_img, warped_frame, tri1, tri2)
+
+#         video_writer.write(warped_frame)
+
+#     cap.release()
+#     video_writer.release()
+#     print("Video processing complete.")
+
+
+# if __name__ == "__main__":
+#     static_image_path = 'Imron.JPG'
+#     video_path = 'my_video.mp4'
+#     output_video_path = 'output.mp4'
+#     process_video(static_image_path, video_path, output_video_path)
